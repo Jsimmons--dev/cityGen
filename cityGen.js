@@ -16,12 +16,14 @@ blocks.set('0:0', { coords: [0, 0], blockType: 'commercial', blockSpace: new Arr
 //https://www.figma.com/file/xEecfDUK8DIqtQOSI81UOj/Barcelona-Inset?type=whiteboard&node-id=0%3A1&t=3IIuGfCHM6eP22bE-1
 const barcelonaRingInset = 1
 
+const barcelonaSize = (blockSize - (barcelonaRingInset))
+
 //This is a control variable determining how likely a nighbor is to be generated based on the distance from the origin
 // less than 1 makes the city smaller, greater than 1 makes the city larger. Go easy on it as it is not linear. 0-1 is harmless and small. 5 is huge (1000+ buildings)
-const sensitivityToDistance = 1
+const sensitivityToDistance = 3
 
 //Similar to above, this is a control variable so you can tune how likely a block is to be commercial based on the distance from the origin
-const sensitivityToCommericalOrigin = .9
+const sensitivityToCommericalOrigin = 1
 
 //block types not yet actually used, the code just uses the string.
 //TODO make this array used
@@ -35,18 +37,36 @@ function generateAdjacentCoords(x, y) {
 
 // go around the ring of the barcelona inset and return the remaining spaces offset by the position given (indexed at 0)
 // e.g. if you are a 5 x 5 with inset 1, the first position is 1,1 and so with position 1 your remaining spaces are 2,1 3,1 4,1 4,2 4,3 4,4 3,4 2,4 1,4 1,3 1,2 (TODO: comment sequence auto-completed by AI, check by hand)
+
+function isOnSouthSideOfBlock(row, col) {
+    return (row === barcelonaRingInset && col !== 0 && col !== barcelonaSize)
+}
+
+function isOnNorthSideOfBlock(row, col) {
+    return (row === barcelonaSize - 1 && col !== 0 && col !== barcelonaSize)
+}
+
+function isOnEastSideOfBlock(row, col) {
+    return (col === barcelonaSize - 1 && row !== 0 && row !== barcelonaSize)
+}
+
+function isOnWestSideOfBlock(row, col) {
+    return (col === barcelonaRingInset && row !== 0 && row !== barcelonaSize)
+}
+
 function getRemainingBarcelonaSpaces({ position }) {
     const barcelonaSize = (blockSize - (barcelonaRingInset))
     const spaces = new Array()
     for (let row = 0; row <= barcelonaSize; row++) {
         for (let col = 0; col <= barcelonaSize; col++) {
-            if (
-                (row === barcelonaRingInset && col !== 0 && col !== barcelonaSize) ||
-                (row === barcelonaSize - 1 && col !== 0 && col !== barcelonaSize) ||
-                (col === barcelonaRingInset && row !== 0 && row !== barcelonaSize) ||
-                (col === barcelonaSize - 1 && row !== 0 && row !== barcelonaSize)
-            ) {
-                spaces.push([row, col])
+            if (isOnNorthSideOfBlock(row, col)) {
+                spaces.push({ sideOfBlock: "N", coords: [row, col] })
+            } else if (isOnSouthSideOfBlock(row, col)) {
+                spaces.push({ sideOfBlock: "S", coords: [row, col] })
+            } else if (isOnEastSideOfBlock(row, col)) {
+                spaces.push({ sideOfBlock: "E", coords: [row, col] })
+            } else if (isOnWestSideOfBlock(row, col)) {
+                spaces.push({ sideOfBlock: "W", coords: [row, col] })
             }
         }
     }
@@ -167,16 +187,86 @@ function checkIfBuildingFits({ block, buildingFootprint, buildingOrigin }) {
     return !collision
 }
 
+function generateEvenNumber(i) {
+    return Math.floor(i / 2) * 2
+}
+
+function generateOddNumber(i) {
+    return Math.floor(i / 2) * 2 + 1
+}
+
+//https://stackoverflow.com/questions/13627308/add-st-nd-rd-and-th-ordinal-suffix-to-a-number
+function ordinalSuffix(i) {
+    var j = i % 10,
+        k = i % 100;
+    if (j == 1 && k != 11) {
+        return i + "st";
+    }
+    if (j == 2 && k != 12) {
+        return i + "nd";
+    }
+    if (j == 3 && k != 13) {
+        return i + "rd";
+    }
+    return i + "th";
+}
+
+function getAdjacentStreets({ block }) {
+    const [blockX, blockY] = block.coords
+    let northStreetDetermination = (blockY + 1 >= 0) ? "N" : "S"
+    let eastStreetDetermination = (blockX + 1 >= 0) ? "E" : "W"
+    let soundStreetDetermination = (blockY - 1 >= 0) ? "N" : "S"
+    let westStreetDetermination = (blockX - 1 >= 0) ? "E" : "W"
+    const NStreetNumber = generateEvenNumber(Math.abs(blockY + 1))
+    const EStreetNumber = generateOddNumber(Math.abs(blockX + 1))
+    const SStreetNumber = generateEvenNumber(Math.abs(blockY - 1))
+    const WStreetNumber = generateOddNumber(Math.abs(blockX - 1))
+    return [
+        `${northStreetDetermination} ${ordinalSuffix(NStreetNumber)}`,
+        `${eastStreetDetermination} ${ordinalSuffix(EStreetNumber)}`,
+        `${soundStreetDetermination} ${ordinalSuffix(SStreetNumber)}`,
+        `${westStreetDetermination} ${ordinalSuffix(WStreetNumber)}`]
+
+}
+
+function getStreetClosestToEachBuildingOrigin({ adjacentStreets, sideOfBlock }) {
+    const street = adjacentStreets.filter((street) => street.startsWith(sideOfBlock))[0]
+    if (sideOfBlock === 'N') {
+        return adjacentStreets[0]
+    } else if (sideOfBlock === 'E') {
+        return adjacentStreets[1]
+    }
+    else if (sideOfBlock === 'S') {
+        return adjacentStreets[2]
+    }
+    else if (sideOfBlock === 'W') {
+        return adjacentStreets[3]
+    }
+}
+
+function generateAddressesForBlock({ block }) {
+    const [blockX, blockY] = block.coords
+    const adjacentStreets = getAdjacentStreets({ block })
+    let buildingCounts = { N: Math.abs(blockX) + 11, E: Math.abs(blockY) + 1, S: Math.abs(blockX) + 1, W: Math.abs(blockY) + 11 }
+    for (const building of block.buildings) {
+        const street = getStreetClosestToEachBuildingOrigin({ adjacentStreets, sideOfBlock: building.sideOfBlock })
+        building.address = `${buildingCounts[building.sideOfBlock]} ${street}`
+        buildingCounts[building.sideOfBlock] += 1
+    }
+}
+
 //walk over each position in the barcelona ring, try to make a building, see if it fits, if so add it
 function fillBlock({ block }) {
     const remainingBarcelonaSpaces = getRemainingBarcelonaSpaces({ position: 0 })
     for (const space of remainingBarcelonaSpaces) {
-        const newBuilding = { block, buildingFootprint: generatePossibleBuilding(block.blockType).buildingFootprint, buildingOrigin: space }
+        const newBuilding = { block, buildingFootprint: generatePossibleBuilding(block.blockType).buildingFootprint, buildingOrigin: space.coords, sideOfBlock: space.sideOfBlock }
         const canBuild = checkIfBuildingFits(newBuilding)
         if (canBuild) {
             block.buildings.push(newBuilding)
         }
+        //this method updates the state of each building with an address
     }
+    generateAddressesForBlock({ block })
 }
 
 //This is generating the neighbors of the block recursively and uses a handmade falloff function to determine the likelihood of a neighbor being generated
@@ -237,6 +327,7 @@ const white = new THREE.Color().setHex(0xffffff);
 const brown = new THREE.Color().setHex(0x999900);
 const grey = new THREE.Color().setHex(0xaaaaaa);
 const green = new THREE.Color().setHex(0x00ff00);
+const red = new THREE.Color().setHex(0xff0000);
 
 init();
 animate();
@@ -272,7 +363,10 @@ function init() {
         const yBlockOffset = yBlock * blockSizeInMeters
         blockMatrix.setPosition(xBlockOffset + (blockSizeInMeters / 2), yBlockOffset + (blockSizeInMeters / 2), 0);
         blockMesh.setMatrixAt(blockCount, blockMatrix);
-        if (block.blockType === 'commercial') {
+        if (xBlock === 0 && yBlock === 0) {
+            blockMesh.setColorAt(blockCount, red);
+        }
+        else if (block.blockType === 'commercial') {
             blockMesh.setColorAt(blockCount, grey);
         } else if (block.blockType === 'residential') {
             blockMesh.setColorAt(blockCount, brown);
