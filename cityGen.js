@@ -319,8 +319,11 @@ let camera, scene, renderer, controls, stats;
 
 let blockMesh;
 const numCityBlocks = blocks.size
+let clickingBuilding = false
 
-const raycaster = new THREE.Raycaster();
+const buildingMeshes = []
+
+let raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2(1, 1);
 
 const white = new THREE.Color().setHex(0xffffff);
@@ -334,7 +337,7 @@ animate();
 
 function init() {
 
-    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 10000);
+    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 10000);
     const cityBlockAreaInBlocks = numCityBlocks * 2
     camera.position.set(cityBlockAreaInBlocks, cityBlockAreaInBlocks, cityBlockAreaInBlocks);
     camera.lookAt(0, 0, 0);
@@ -350,6 +353,7 @@ function init() {
     blockMesh = new THREE.InstancedMesh(blockGeometry, blockMaterial, numCityBlocks);
 
     let blockCount = 0;
+
 
     const blockMatrix = new THREE.Matrix4();
 
@@ -387,6 +391,8 @@ function init() {
                 buildingMesh.scale.set(buildingFootprint[0] * spaceBetweenBuildings, buildingFootprint[1] * spaceBetweenBuildings, (buildingFootprint[0] + buildingFootprint[1]) / 2)
                 buildingMesh.material.color.set(green);
             }
+            buildingMesh.buildingData = building
+            buildingMeshes.push(buildingMesh)
             scene.add(buildingMesh);
         }
         for (let row = 0; row < blockSize; row++) {
@@ -412,12 +418,28 @@ function init() {
     controls.enableZoom = true;
     controls.enablePan = false;
 
-    stats = new Stats();
-    document.body.appendChild(stats.dom);
-
     window.addEventListener('resize', onWindowResize);
-    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('contextmenu', onMouseMove);
+    document.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('mouseup', onMouseUp);
 
+}
+
+
+function onMouseDown(event) {
+    event.preventDefault();
+    if (event.button === 2) {
+        raycaster = new THREE.Raycaster();
+        clickingBuilding = true
+    }
+}
+
+function onMouseUp(event) {
+    event.preventDefault();
+    if (event.button === 2) {
+        raycaster = undefined
+        clickingBuilding = true
+    }
 }
 
 function onWindowResize() {
@@ -433,8 +455,9 @@ function onMouseMove(event) {
 
     event.preventDefault();
 
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
+    mouse.x = (event.offsetX / window.innerWidth) * 2 - 1;
+    mouse.y = - (event.offsetY / window.innerHeight) * 2 + 1;
+    console.log(mouse.x, mouse.y)
 
 }
 
@@ -444,31 +467,22 @@ function animate() {
 
     controls.update();
 
-    raycaster.setFromCamera(mouse, camera);
+    if (clickingBuilding) {
 
-    //commented out this thing that would change the color of things under the mouse. Feels useful.
-    // const intersection = raycaster.intersectObject(buildingMesh);
+        raycaster.setFromCamera(mouse, camera);
 
-    // if (intersection.length > 0) {
+        //commented out this thing that would change the color of things under the mouse. Feels useful.
+        const intersection = raycaster.intersectObjects(buildingMeshes);
 
-    // 	const instanceId = intersection[0].instanceId;
+        if (intersection.length > 0) {
+            console.log(intersection[0])
+            console.log(intersection[0].object.buildingData)
+            intersection[0].object.material.color.setHex(Math.random() * 0xffffff)
+        }
+    } else {
 
-    // 	buildingMesh.getColorAt(instanceId, color);
-
-    // 	if (color.equals(white)) {
-
-    // 		// mesh.setColorAt( instanceId, color.setHex( Math.random() * 0xffffff ) );
-
-    // 		// mesh.instanceColor.needsUpdate = true;
-
-    // 	}
-
-    // }
-
+    }
     render();
-
-    stats.update();
-
 }
 
 function render() {
