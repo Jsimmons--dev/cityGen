@@ -20,7 +20,7 @@ const barcelonaSize = (blockSize - (barcelonaRingInset))
 
 //This is a control variable determining how likely a nighbor is to be generated based on the distance from the origin
 // less than 1 makes the city smaller, greater than 1 makes the city larger. Go easy on it as it is not linear. 0-1 is harmless and small. 5 is huge (1000+ buildings)
-const sensitivityToDistance = 3
+const sensitivityToDistance = 2
 
 //Similar to above, this is a control variable so you can tune how likely a block is to be commercial based on the distance from the origin
 const sensitivityToCommericalOrigin = 1
@@ -305,6 +305,8 @@ import Stats from 'three/addons/libs/stats.module.js';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+let selectedBuilding = null
+
 //actually generate a city
 generateNeighbors({
     block: blocks.get('0:0'),
@@ -319,11 +321,10 @@ let camera, scene, renderer, controls, stats;
 
 let blockMesh;
 const numCityBlocks = blocks.size
-let clickingBuilding = false
 
 const buildingMeshes = []
 
-let raycaster = new THREE.Raycaster();
+const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2(1, 1);
 
 const white = new THREE.Color().setHex(0xffffff);
@@ -419,26 +420,14 @@ function init() {
     controls.enablePan = false;
 
     window.addEventListener('resize', onWindowResize);
-    document.addEventListener('contextmenu', onMouseMove);
+    document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mousedown', onMouseDown);
-    document.addEventListener('mouseup', onMouseUp);
 
 }
-
 
 function onMouseDown(event) {
-    event.preventDefault();
-    if (event.button === 2) {
-        raycaster = new THREE.Raycaster();
-        clickingBuilding = true
-    }
-}
-
-function onMouseUp(event) {
-    event.preventDefault();
-    if (event.button === 2) {
-        raycaster = undefined
-        clickingBuilding = true
+    if (event.buttons === 2) {
+        console.log(selectedBuilding.buildingData)
     }
 }
 
@@ -454,11 +443,8 @@ function onWindowResize() {
 function onMouseMove(event) {
 
     event.preventDefault();
-
     mouse.x = (event.offsetX / window.innerWidth) * 2 - 1;
-    mouse.y = - (event.offsetY / window.innerHeight) * 2 + 1;
-    console.log(mouse.x, mouse.y)
-
+    mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
 }
 
 function animate() {
@@ -467,20 +453,25 @@ function animate() {
 
     controls.update();
 
-    if (clickingBuilding) {
+    raycaster.setFromCamera(mouse, camera);
 
-        raycaster.setFromCamera(mouse, camera);
-
-        //commented out this thing that would change the color of things under the mouse. Feels useful.
-        const intersection = raycaster.intersectObjects(buildingMeshes);
-
-        if (intersection.length > 0) {
-            console.log(intersection[0])
-            console.log(intersection[0].object.buildingData)
-            intersection[0].object.material.color.setHex(Math.random() * 0xffffff)
+    //commented out this thing that would change the color of things under the mouse. Feels useful.
+    const intersection = raycaster.intersectObjects(buildingMeshes);
+    if (intersection.length > 0) {
+        if(intersection[0].object !== selectedBuilding){
+            if(selectedBuilding?.buildingData?.block.blockType === 'commercial'){
+                selectedBuilding.material.color.set(white);
+            } else if(selectedBuilding?.buildingData?.block.blockType === 'residential'){
+                selectedBuilding.material.color.set(green);
+            }
+            selectedBuilding = intersection[0].object
         }
-    } else {
 
+        // selectedBuilding.material.color.setHex(0xff0000)
+        // }
+        // selectedBuilding = intersection[0].object
+        intersection[0].object.material.color.setHex(0xff0000)
+        // }
     }
     render();
 }
