@@ -20,7 +20,7 @@ const barcelonaSize = (blockSize - (barcelonaRingInset))
 
 //This is a control variable determining how likely a nighbor is to be generated based on the distance from the origin
 // less than 1 makes the city smaller, greater than 1 makes the city larger. Go easy on it as it is not linear. 0-1 is harmless and small. 5 is huge (1000+ buildings)
-const sensitivityToDistance = 3
+const sensitivityToDistance = 2
 
 //Similar to above, this is a control variable so you can tune how likely a block is to be commercial based on the distance from the origin
 const sensitivityToCommericalOrigin = 1
@@ -305,6 +305,8 @@ import Stats from 'three/addons/libs/stats.module.js';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+let selectedBuilding = null
+
 //actually generate a city
 generateNeighbors({
     block: blocks.get('0:0'),
@@ -320,6 +322,8 @@ let camera, scene, renderer, controls, stats;
 let blockMesh;
 const numCityBlocks = blocks.size
 
+const buildingMeshes = []
+
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2(1, 1);
 
@@ -334,7 +338,7 @@ animate();
 
 function init() {
 
-    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 10000);
+    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 10000);
     const cityBlockAreaInBlocks = numCityBlocks * 2
     camera.position.set(cityBlockAreaInBlocks, cityBlockAreaInBlocks, cityBlockAreaInBlocks);
     camera.lookAt(0, 0, 0);
@@ -350,6 +354,7 @@ function init() {
     blockMesh = new THREE.InstancedMesh(blockGeometry, blockMaterial, numCityBlocks);
 
     let blockCount = 0;
+
 
     const blockMatrix = new THREE.Matrix4();
 
@@ -387,6 +392,8 @@ function init() {
                 buildingMesh.scale.set(buildingFootprint[0] * spaceBetweenBuildings, buildingFootprint[1] * spaceBetweenBuildings, (buildingFootprint[0] + buildingFootprint[1]) / 2)
                 buildingMesh.material.color.set(green);
             }
+            buildingMesh.buildingData = building
+            buildingMeshes.push(buildingMesh)
             scene.add(buildingMesh);
         }
         for (let row = 0; row < blockSize; row++) {
@@ -412,12 +419,16 @@ function init() {
     controls.enableZoom = true;
     controls.enablePan = false;
 
-    stats = new Stats();
-    document.body.appendChild(stats.dom);
-
     window.addEventListener('resize', onWindowResize);
     document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mousedown', onMouseDown);
 
+}
+
+function onMouseDown(event) {
+    if (event.buttons === 2) {
+        console.log(selectedBuilding.buildingData)
+    }
 }
 
 function onWindowResize() {
@@ -432,10 +443,8 @@ function onWindowResize() {
 function onMouseMove(event) {
 
     event.preventDefault();
-
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.x = (event.offsetX / window.innerWidth) * 2 - 1;
     mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
-
 }
 
 function animate() {
@@ -447,28 +456,24 @@ function animate() {
     raycaster.setFromCamera(mouse, camera);
 
     //commented out this thing that would change the color of things under the mouse. Feels useful.
-    // const intersection = raycaster.intersectObject(buildingMesh);
+    const intersection = raycaster.intersectObjects(buildingMeshes);
+    if (intersection.length > 0) {
+        if(intersection[0].object !== selectedBuilding){
+            if(selectedBuilding?.buildingData?.block.blockType === 'commercial'){
+                selectedBuilding.material.color.set(white);
+            } else if(selectedBuilding?.buildingData?.block.blockType === 'residential'){
+                selectedBuilding.material.color.set(green);
+            }
+            selectedBuilding = intersection[0].object
+        }
 
-    // if (intersection.length > 0) {
-
-    // 	const instanceId = intersection[0].instanceId;
-
-    // 	buildingMesh.getColorAt(instanceId, color);
-
-    // 	if (color.equals(white)) {
-
-    // 		// mesh.setColorAt( instanceId, color.setHex( Math.random() * 0xffffff ) );
-
-    // 		// mesh.instanceColor.needsUpdate = true;
-
-    // 	}
-
-    // }
-
+        // selectedBuilding.material.color.setHex(0xff0000)
+        // }
+        // selectedBuilding = intersection[0].object
+        intersection[0].object.material.color.setHex(0xff0000)
+        // }
+    }
     render();
-
-    stats.update();
-
 }
 
 function render() {
