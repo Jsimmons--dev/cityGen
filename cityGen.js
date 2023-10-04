@@ -60,13 +60,13 @@ function getRemainingBarcelonaSpaces({ position }) {
     for (let row = 0; row <= barcelonaSize; row++) {
         for (let col = 0; col <= barcelonaSize; col++) {
             if (isOnNorthSideOfBlock(row, col)) {
-                spaces.push({ sideOfBlock: "N", coords: [row, col] })
-            } else if (isOnSouthSideOfBlock(row, col)) {
-                spaces.push({ sideOfBlock: "S", coords: [row, col] })
-            } else if (isOnEastSideOfBlock(row, col)) {
-                spaces.push({ sideOfBlock: "E", coords: [row, col] })
-            } else if (isOnWestSideOfBlock(row, col)) {
                 spaces.push({ sideOfBlock: "W", coords: [row, col] })
+            } else if (isOnSouthSideOfBlock(row, col)) {
+                spaces.push({ sideOfBlock: "E", coords: [row, col] })
+            } else if (isOnEastSideOfBlock(row, col)) {
+                spaces.push({ sideOfBlock: "S", coords: [row, col] })
+            } else if (isOnWestSideOfBlock(row, col)) {
+                spaces.push({ sideOfBlock: "N", coords: [row, col] })
             }
         }
     }
@@ -188,11 +188,11 @@ function checkIfBuildingFits({ block, buildingFootprint, buildingOrigin }) {
 }
 
 function generateEvenNumber(i) {
-    return Math.floor(i / 2) * 2
+    return i * 2
 }
 
 function generateOddNumber(i) {
-    return Math.floor(i / 2) * 2 + 1
+    return (i * 2) + 1
 }
 
 //https://stackoverflow.com/questions/13627308/add-st-nd-rd-and-th-ordinal-suffix-to-a-number
@@ -213,30 +213,43 @@ function ordinalSuffix(i) {
 
 function getAdjacentStreets({ block }) {
     const [blockX, blockY] = block.coords
-    let northStreetDetermination = (blockY + 1 >= 0) ? "N" : "S"
-    let eastStreetDetermination = (blockX + 1 >= 0) ? "E" : "W"
-    let soundStreetDetermination = (blockY - 1 >= 0) ? "N" : "S"
-    let westStreetDetermination = (blockX - 1 >= 0) ? "E" : "W"
-    const NStreetNumber = generateEvenNumber(Math.abs(blockY + 1))
-    const EStreetNumber = generateOddNumber(Math.abs(blockX + 1))
-    const SStreetNumber = generateEvenNumber(Math.abs(blockY - 1))
-    const WStreetNumber = generateOddNumber(Math.abs(blockX - 1))
+    let northStreetDetermination = (blockX > 0) ? "W" : "E"
+    let eastStreetDetermination = (blockY > 0) ? "N" : "S"
+    let southStreetDetermination = (blockX > 0) ? "W" : "E"
+    let westStreetDetermination = (blockY > 0) ? "N" : "S"
+    let EStreetNumber
+    let WStreetNumber
+    let NStreetNumber
+    let SStreetNumber
+    if (blockX >= 0) {
+        EStreetNumber = -generateEvenNumber(Math.abs(blockX) + 1)
+        WStreetNumber = -generateEvenNumber(Math.abs(blockX))
+    } else {
+        EStreetNumber = generateEvenNumber(Math.abs(blockX) - 1)
+        WStreetNumber = generateEvenNumber(Math.abs(blockX))
+    }
+    if (blockY >= 0) {
+        NStreetNumber = generateOddNumber(Math.abs(blockY) + 1)
+        SStreetNumber = generateOddNumber(Math.abs(blockY))
+    } else {
+        NStreetNumber = -generateOddNumber(Math.abs(blockY) - 1)
+        SStreetNumber = -generateOddNumber(Math.abs(blockY))
+    }
     return [
         `${northStreetDetermination} ${ordinalSuffix(NStreetNumber)}`,
         `${eastStreetDetermination} ${ordinalSuffix(EStreetNumber)}`,
-        `${soundStreetDetermination} ${ordinalSuffix(SStreetNumber)}`,
+        `${southStreetDetermination} ${ordinalSuffix(SStreetNumber)}`,
         `${westStreetDetermination} ${ordinalSuffix(WStreetNumber)}`]
 
 }
 
 function getStreetClosestToEachBuildingOrigin({ adjacentStreets, sideOfBlock }) {
-    const street = adjacentStreets.filter((street) => street.startsWith(sideOfBlock))[0]
-    if (sideOfBlock === 'N') {
+    if (sideOfBlock === 'S') {
         return adjacentStreets[0]
     } else if (sideOfBlock === 'E') {
         return adjacentStreets[1]
     }
-    else if (sideOfBlock === 'S') {
+    else if (sideOfBlock === 'N') {
         return adjacentStreets[2]
     }
     else if (sideOfBlock === 'W') {
@@ -247,7 +260,7 @@ function getStreetClosestToEachBuildingOrigin({ adjacentStreets, sideOfBlock }) 
 function generateAddressesForBlock({ block }) {
     const [blockX, blockY] = block.coords
     const adjacentStreets = getAdjacentStreets({ block })
-    let buildingCounts = { N: Math.abs(blockX) + 11, E: Math.abs(blockY) + 1, S: Math.abs(blockX) + 1, W: Math.abs(blockY) + 11 }
+    let buildingCounts = { N: 100 * Math.abs(blockX) + 11, E: 100 * Math.abs(blockY) + 1, S: 100 * Math.abs(blockX) + 1, W: 100 * Math.abs(blockY) + 11 }
     for (const building of block.buildings) {
         const street = getStreetClosestToEachBuildingOrigin({ adjacentStreets, sideOfBlock: building.sideOfBlock })
         building.address = `${buildingCounts[building.sideOfBlock]} ${street}`
@@ -312,9 +325,27 @@ generateNeighbors({
     allBlocks: blocks
 })
 
+let minX = 0, maxX = 0, minY = 0, maxY = 0
 for (const block of blocks.values()) {
     fillBlock({ block })
+    const [x, y] = block.coords
+    if (x < minX) {
+        minX = x
+    }
+    if (x > maxX) {
+        maxX = x
+    }
+    if (y < minY) {
+        minY = y
+    }
+    if (y > maxY) {
+        maxY = y
+    }
 }
+
+let cityWidth = maxX - minX
+let cityHeight = maxY - minY
+let cityArea = cityWidth * cityHeight
 
 let camera, scene, renderer, controls, stats;
 
@@ -330,6 +361,7 @@ const white = new THREE.Color().setHex(0xffffff);
 const brown = new THREE.Color().setHex(0x999900);
 const grey = new THREE.Color().setHex(0xaaaaaa);
 const green = new THREE.Color().setHex(0x00ff00);
+const blue = new THREE.Color().setHex(0x0000ff);
 const red = new THREE.Color().setHex(0xff0000);
 const northRed = new THREE.Color().setHex(0xdd0000);
 const eastRed = new THREE.Color().setHex(0x990000);
@@ -342,8 +374,8 @@ animate();
 function init() {
 
     camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 10000);
-    const cityBlockAreaInBlocks = numCityBlocks * 2
-    camera.position.set(cityBlockAreaInBlocks, cityBlockAreaInBlocks, cityBlockAreaInBlocks);
+    const distanceAwayFromCamera = 6 * Math.max(cityWidth, cityHeight)
+    camera.position.set(0, distanceAwayFromCamera, -distanceAwayFromCamera);
     camera.lookAt(0, 0, 0);
 
     scene = new THREE.Scene();
@@ -369,7 +401,8 @@ function init() {
         const [xBlock, yBlock] = block.coords
         const xBlockOffset = xBlock * blockSizeInMeters
         const yBlockOffset = yBlock * blockSizeInMeters
-        blockMatrix.setPosition(xBlockOffset + (blockSizeInMeters / 2), yBlockOffset + (blockSizeInMeters / 2), 0);
+        blockMatrix.makeRotationX(- Math.PI / 2)
+        blockMatrix.setPosition(xBlockOffset + (blockSizeInMeters / 2), 0, yBlockOffset + (blockSizeInMeters / 2));
         blockMesh.setMatrixAt(blockCount, blockMatrix);
         if (xBlock === 0 && yBlock === 0) {
             blockMesh.setColorAt(blockCount, red);
@@ -395,17 +428,20 @@ function init() {
             const material = new THREE.MeshPhongMaterial({ color: 0xffffff });
             const buildingMesh = new THREE.Mesh(geometry, material);
             if (block.blockType === 'commercial') {
-                buildingMesh.position.set(xBlockOffset + buildingOrigin[0] + buildingFootprint[0] / 2, yBlockOffset + buildingOrigin[1] + buildingFootprint[1] / 2, (buildingFootprint[0] + buildingFootprint[1]) / (2))
-                buildingMesh.scale.set(buildingFootprint[0] * spaceBetweenBuildings, buildingFootprint[1] * spaceBetweenBuildings, (buildingFootprint[0] + buildingFootprint[1]))
+                buildingMesh.position.set(xBlockOffset + (blockSize - buildingOrigin[1]) - buildingFootprint[1] / 2, (buildingFootprint[0] + buildingFootprint[1]) / (2), yBlockOffset + (blockSize - buildingOrigin[0]) - buildingFootprint[0] / 2)
+                buildingMesh.scale.set(buildingFootprint[1] * spaceBetweenBuildings, (buildingFootprint[0] + buildingFootprint[1]), buildingFootprint[0] * spaceBetweenBuildings)
                 buildingMesh.material.color.set(white);
             } else if (block.blockType === 'residential') {
-                buildingMesh.position.set(xBlockOffset + buildingOrigin[0] + buildingFootprint[0] / 2, yBlockOffset + buildingOrigin[1] + buildingFootprint[1] / 2, (buildingFootprint[0] + buildingFootprint[1]) / (2 * 2))
-                buildingMesh.scale.set(buildingFootprint[0] * spaceBetweenBuildings, buildingFootprint[1] * spaceBetweenBuildings, (buildingFootprint[0] + buildingFootprint[1]) / 2)
+                buildingMesh.position.set(xBlockOffset + (blockSize - buildingOrigin[1]) - buildingFootprint[1] / 2, (buildingFootprint[0] + buildingFootprint[1]) / (2 * 2), yBlockOffset + (blockSize - buildingOrigin[0]) - buildingFootprint[0] / 2)
+                buildingMesh.scale.set(buildingFootprint[1] * spaceBetweenBuildings, (buildingFootprint[0] + buildingFootprint[1]) / 2, buildingFootprint[0] * spaceBetweenBuildings)
                 buildingMesh.material.color.set(green);
             }
             buildingMesh.buildingData = building
             buildingMeshes.push(buildingMesh)
             scene.add(buildingMesh);
+            if (building.address.includes('302')) {
+                buildingMesh.material.color.set(blue);
+            }
         }
         for (let row = 0; row < blockSize; row++) {
             for (let col = 0; col < blockSize; col++) {
