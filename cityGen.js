@@ -39,19 +39,19 @@ function generateAdjacentCoords(x, y) {
 // e.g. if you are a 5 x 5 with inset 1, the first position is 1,1 and so with position 1 your remaining spaces are 2,1 3,1 4,1 4,2 4,3 4,4 3,4 2,4 1,4 1,3 1,2 (TODO: comment sequence auto-completed by AI, check by hand)
 
 function isOnSouthSideOfBlock(row, col) {
-    return (row === barcelonaRingInset && col !== 0 && col !== barcelonaSize)
+    return (col === barcelonaRingInset && row !== 0 && row !== barcelonaSize)
 }
 
 function isOnNorthSideOfBlock(row, col) {
-    return (row === barcelonaSize - 1 && col !== 0 && col !== barcelonaSize)
-}
-
-function isOnEastSideOfBlock(row, col) {
     return (col === barcelonaSize - 1 && row !== 0 && row !== barcelonaSize)
 }
 
+function isOnEastSideOfBlock(row, col) {
+    return (row === barcelonaSize - 1 && col !== 0 && col !== barcelonaSize)
+}
+
 function isOnWestSideOfBlock(row, col) {
-    return (col === barcelonaRingInset && row !== 0 && row !== barcelonaSize)
+    return (row === barcelonaRingInset && col !== 0 && col !== barcelonaSize)
 }
 
 function getRemainingBarcelonaSpaces({ position }) {
@@ -301,7 +301,6 @@ function generateNeighbors({ block, allBlocks }) {
 
 import * as THREE from 'three';
 
-import Stats from 'three/addons/libs/stats.module.js';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
@@ -332,6 +331,10 @@ const brown = new THREE.Color().setHex(0x999900);
 const grey = new THREE.Color().setHex(0xaaaaaa);
 const green = new THREE.Color().setHex(0x00ff00);
 const red = new THREE.Color().setHex(0xff0000);
+const northRed = new THREE.Color().setHex(0xdd0000);
+const eastRed = new THREE.Color().setHex(0x990000);
+const southRed = new THREE.Color().setHex(0x440000);
+const westRed = new THREE.Color().setHex(0x220000);
 
 init();
 animate();
@@ -370,6 +373,14 @@ function init() {
         blockMesh.setMatrixAt(blockCount, blockMatrix);
         if (xBlock === 0 && yBlock === 0) {
             blockMesh.setColorAt(blockCount, red);
+        } else if (xBlock === 0 && yBlock === 1) {
+            blockMesh.setColorAt(blockCount, northRed);
+        } else if (xBlock === 1 && yBlock === 0) {
+            blockMesh.setColorAt(blockCount, eastRed);
+        } else if (xBlock === 0 && yBlock === -1) {
+            blockMesh.setColorAt(blockCount, southRed);
+        } else if (xBlock === -1 && yBlock === 0) {
+            blockMesh.setColorAt(blockCount, westRed);
         }
         else if (block.blockType === 'commercial') {
             blockMesh.setColorAt(blockCount, grey);
@@ -458,10 +469,10 @@ function animate() {
     //commented out this thing that would change the color of things under the mouse. Feels useful.
     const intersection = raycaster.intersectObjects(buildingMeshes);
     if (intersection.length > 0) {
-        if(intersection[0].object !== selectedBuilding){
-            if(selectedBuilding?.buildingData?.block.blockType === 'commercial'){
+        if (intersection[0].object !== selectedBuilding) {
+            if (selectedBuilding?.buildingData?.block.blockType === 'commercial') {
                 selectedBuilding.material.color.set(white);
-            } else if(selectedBuilding?.buildingData?.block.blockType === 'residential'){
+            } else if (selectedBuilding?.buildingData?.block.blockType === 'residential') {
                 selectedBuilding.material.color.set(green);
             }
             selectedBuilding = intersection[0].object
