@@ -247,7 +247,7 @@ function getStreetClosestToEachBuildingOrigin({ adjacentStreets, sideOfBlock }) 
 function generateAddressesForBlock({ block }) {
     const [blockX, blockY] = block.coords
     const adjacentStreets = getAdjacentStreets({ block })
-    let buildingCounts = { N: Math.abs(blockX) + 11, E: Math.abs(blockY) + 1, S: Math.abs(blockX) + 1, W: Math.abs(blockY) + 11 }
+    let buildingCounts = { N: Math.abs(blockY) + 11, E: Math.abs(blockX) + 1, S: Math.abs(blockY) + 1, W: Math.abs(blockX) + 11 }
     for (const building of block.buildings) {
         const street = getStreetClosestToEachBuildingOrigin({ adjacentStreets, sideOfBlock: building.sideOfBlock })
         building.address = `${buildingCounts[building.sideOfBlock]} ${street}`
@@ -312,9 +312,27 @@ generateNeighbors({
     allBlocks: blocks
 })
 
+let minX = 0, maxX = 0, minY = 0, maxY = 0
 for (const block of blocks.values()) {
     fillBlock({ block })
+    const [x, y] = block.coords
+    if (x < minX) {
+        minX = x
+    }
+    if (x > maxX) {
+        maxX = x
+    }
+    if (y < minY) {
+        minY = y
+    }
+    if (y > maxY) {
+        maxY = y
+    }
 }
+
+let cityWidth = maxX - minX
+let cityHeight = maxY - minY
+let cityArea = cityWidth * cityHeight
 
 let camera, scene, renderer, controls, stats;
 
@@ -330,6 +348,9 @@ const white = new THREE.Color().setHex(0xffffff);
 const brown = new THREE.Color().setHex(0x999900);
 const grey = new THREE.Color().setHex(0xaaaaaa);
 const green = new THREE.Color().setHex(0x00ff00);
+const blue = new THREE.Color().setHex(0x0000ff);
+const blue2 = new THREE.Color().setHex(0x000099);
+const blue3 = new THREE.Color().setHex(0x005555);
 const red = new THREE.Color().setHex(0xff0000);
 const northRed = new THREE.Color().setHex(0xdd0000);
 const eastRed = new THREE.Color().setHex(0x990000);
@@ -342,8 +363,8 @@ animate();
 function init() {
 
     camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 10000);
-    const cityBlockAreaInBlocks = numCityBlocks * 2
-    camera.position.set(cityBlockAreaInBlocks, cityBlockAreaInBlocks, cityBlockAreaInBlocks);
+    const distanceAwayFromCamera = 6 *  Math.max(cityWidth, cityHeight)
+    camera.position.set(distanceAwayFromCamera, distanceAwayFromCamera, distanceAwayFromCamera);
     camera.lookAt(0, 0, 0);
 
     scene = new THREE.Scene();
@@ -369,7 +390,8 @@ function init() {
         const [xBlock, yBlock] = block.coords
         const xBlockOffset = xBlock * blockSizeInMeters
         const yBlockOffset = yBlock * blockSizeInMeters
-        blockMatrix.setPosition(xBlockOffset + (blockSizeInMeters / 2), yBlockOffset + (blockSizeInMeters / 2), 0);
+        blockMatrix.makeRotationX(- Math.PI / 2)
+        blockMatrix.setPosition(xBlockOffset + (blockSizeInMeters / 2),0, yBlockOffset + (blockSizeInMeters / 2));
         blockMesh.setMatrixAt(blockCount, blockMatrix);
         if (xBlock === 0 && yBlock === 0) {
             blockMesh.setColorAt(blockCount, red);
@@ -395,17 +417,25 @@ function init() {
             const material = new THREE.MeshPhongMaterial({ color: 0xffffff });
             const buildingMesh = new THREE.Mesh(geometry, material);
             if (block.blockType === 'commercial') {
-                buildingMesh.position.set(xBlockOffset + buildingOrigin[0] + buildingFootprint[0] / 2, yBlockOffset + buildingOrigin[1] + buildingFootprint[1] / 2, (buildingFootprint[0] + buildingFootprint[1]) / (2))
-                buildingMesh.scale.set(buildingFootprint[0] * spaceBetweenBuildings, buildingFootprint[1] * spaceBetweenBuildings, (buildingFootprint[0] + buildingFootprint[1]))
+                buildingMesh.position.set(xBlockOffset + buildingOrigin[0] + buildingFootprint[0] / 2, (buildingFootprint[0] + buildingFootprint[1]) / (2), yBlockOffset + buildingOrigin[1] + buildingFootprint[1] / 2)
+                buildingMesh.scale.set(buildingFootprint[0] * spaceBetweenBuildings, (buildingFootprint[0] + buildingFootprint[1]), buildingFootprint[1] * spaceBetweenBuildings)
                 buildingMesh.material.color.set(white);
             } else if (block.blockType === 'residential') {
-                buildingMesh.position.set(xBlockOffset + buildingOrigin[0] + buildingFootprint[0] / 2, yBlockOffset + buildingOrigin[1] + buildingFootprint[1] / 2, (buildingFootprint[0] + buildingFootprint[1]) / (2 * 2))
-                buildingMesh.scale.set(buildingFootprint[0] * spaceBetweenBuildings, buildingFootprint[1] * spaceBetweenBuildings, (buildingFootprint[0] + buildingFootprint[1]) / 2)
+                buildingMesh.position.set(xBlockOffset + buildingOrigin[0] + buildingFootprint[0] / 2, (buildingFootprint[0] + buildingFootprint[1]) / (2 * 2), yBlockOffset + buildingOrigin[1] + buildingFootprint[1] / 2)
+                buildingMesh.scale.set(buildingFootprint[0] * spaceBetweenBuildings, (buildingFootprint[0] + buildingFootprint[1]) / 2, buildingFootprint[1] * spaceBetweenBuildings)
                 buildingMesh.material.color.set(green);
             }
             buildingMesh.buildingData = building
             buildingMeshes.push(buildingMesh)
             scene.add(buildingMesh);
+            if(building.address.includes('N 0th') || building.address.includes('S 0th')){
+                buildingMesh.material.color.set(blue);
+            } else if(building.address.includes('N 1st') || building.address.includes('S 1st')){
+                buildingMesh.material.color.set(blue2);
+            } else if(building.address.includes('N 2nd') || building.address.includes('S 2nd')){
+                buildingMesh.material.color.set(blue3);
+            }
+
         }
         for (let row = 0; row < blockSize; row++) {
             for (let col = 0; col < blockSize; col++) {
