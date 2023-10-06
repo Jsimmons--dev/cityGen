@@ -20,15 +20,21 @@ const barcelonaSize = (blockSize - (barcelonaRingInset))
 
 //This is a control variable determining how likely a nighbor is to be generated based on the distance from the origin
 // less than 1 makes the city smaller, greater than 1 makes the city larger. Go easy on it as it is not linear. 0-1 is harmless and small. 5 is huge (1000+ buildings)
-const sensitivityToDistance = 2
+const sensitivityToDistance = 3
 
 //Similar to above, this is a control variable so you can tune how likely a block is to be commercial based on the distance from the origin
 const sensitivityToCommericalOrigin = 1
 
 //block types not yet actually used, the code just uses the string.
 //TODO make this array used
-const blockTypes = ['residential', 'commercial']
+const blockTypes = { 'residential': 'residential', 'commercial': 'commercial', 'urban-residential': 'urban-residential' }
 
+//must add to 1?
+const blockTypePercentageRange = { 'residential': [-Infinity, .1], 'commercial': [.3, 1], 'urban-residential': [.1, .3] }
+const blockTypeOrder = ['commercial', 'urban-residential', 'residential']
+
+const blockTypeColors = { 'residential': new THREE.Color().setHex(0x444400), 'commercial': new THREE.Color().setHex(0x444444), 'urban-residential': new THREE.Color().setHex(0x004400) }
+const buildingTypeColors = { 'residential': new THREE.Color().setHex(0x999900), 'commercial': new THREE.Color().setHex(0xaaaaaa), 'urban-residential': new THREE.Color().setHex(0x00ff00) }
 
 //grab all the blocks that are adjacent to the current block (including diagonals)
 function generateAdjacentCoords(x, y) {
@@ -78,16 +84,16 @@ function getRemainingBarcelonaSpaces({ position }) {
 const { Gamma } = window.gamma
 var dist = new Gamma(1.0, 1.0);
 
-function generatePossibleBuilding(blockType = 'residential') {
+function generatePossibleBuilding(blockType = blockTypes.residential) {
     let buildingFootprintX
     let buildingFootprintY
-    if (blockType === 'residential') {
+    if (blockType === blockTypes.residential) {
         const unifX = Math.random()
         const unifY = Math.random()
         const buildingMaxSize = 5
         buildingFootprintX = Math.floor(dist.cdf(unifX) * buildingMaxSize) + 1
         buildingFootprintY = Math.floor(dist.cdf(unifY) * buildingMaxSize) + 1
-    } else if (blockType === 'commercial') {
+    } else if (blockType === blockTypes.commercial) {
         //ripped an idea from stack overflow to tend commercial districts towards larger buildings
         //https://stackoverflow.com/questions/16110758/generate-random-number-with-a-non-uniform-distribution
         const unifX = Math.random()
@@ -101,6 +107,17 @@ function generatePossibleBuilding(blockType = 'residential') {
         buildingFootprintX = Math.max(buildingMinSize, Math.floor(beta_rightX * buildingMaxSize) + 1)
         buildingFootprintY = Math.min(buildingMinSize, Math.floor(beta_rightY * buildingMaxSize) + 1)
 
+    } else if (blockType === blockTypes['urban-residential']) {
+        const unifX = Math.random()
+        const unifY = Math.random()
+        const buildingMaxSize = 8
+        const buildingMinSize = 6
+        const betaX = Math.pow(Math.sin(unifX * Math.PI / 2), 2)
+        const betaY = Math.pow(Math.sin(unifY * Math.PI / 2), 2)
+        const beta_rightX = (betaX > 0.5) ? 2 * betaX - 1 : 2 * (1 - betaX) - 1;
+        const beta_rightY = (betaY > 0.5) ? 2 * betaY - 1 : 2 * (1 - betaY) - 1;
+        buildingFootprintX = Math.max(buildingMinSize, Math.floor(beta_rightX * buildingMaxSize) + 1)
+        buildingFootprintY = Math.min(buildingMinSize, Math.floor(beta_rightY * buildingMaxSize) + 1)
     }
     return {
         buildingFootprint: [buildingFootprintX, buildingFootprintY]
@@ -299,8 +316,21 @@ function generateNeighbors({ block, allBlocks }) {
 
 
     const distanceMetric = sensitivityToCommericalOrigin * (1 / (distanceFromOrigin + 1))
-    const shouldGenerateCommerical = Math.random() < distanceMetric
-    const blockType = shouldGenerateCommerical ? 'commercial' : 'residential'
+    const generationMetric = distanceMetric
+    const noise = Math.random()
+    // check which block range this falls in
+    let blockType
+    for (const [blockTypeKey, [min, max]] of Object.entries(blockTypePercentageRange)) {
+        if (generationMetric >= min && generationMetric <= max) {
+            blockType = blockTypeKey
+            break
+        }
+    }
+    if (noise < .3) {
+        // pick one block type at random
+        blockType = blockTypeOrder[Math.floor(Math.random() * blockTypeOrder.length)]
+    }
+
     const newNeighborObjs = []
     for (const neighbor of neighbors) {
         const [x, y] = neighbor
@@ -414,11 +444,8 @@ function init() {
             blockMesh.setColorAt(blockCount, southRed);
         } else if (xBlock === -1 && yBlock === 0) {
             blockMesh.setColorAt(blockCount, westRed);
-        }
-        else if (block.blockType === 'commercial') {
-            blockMesh.setColorAt(blockCount, grey);
-        } else if (block.blockType === 'residential') {
-            blockMesh.setColorAt(blockCount, brown);
+        } else {
+            blockMesh.setColorAt(blockCount, blockTypeColors[block.blockType]);
         }
 
         blockCount++
@@ -427,21 +454,20 @@ function init() {
             const geometry = new THREE.BoxGeometry(1, 1, 1);
             const material = new THREE.MeshPhongMaterial({ color: 0xffffff });
             const buildingMesh = new THREE.Mesh(geometry, material);
-            if (block.blockType === 'commercial') {
+            if (block.blockType === blockTypes.commercial) {
                 buildingMesh.position.set(xBlockOffset + (blockSize - buildingOrigin[1]) - buildingFootprint[1] / 2, (buildingFootprint[0] + buildingFootprint[1]) / (2), yBlockOffset + (blockSize - buildingOrigin[0]) - buildingFootprint[0] / 2)
                 buildingMesh.scale.set(buildingFootprint[1] * spaceBetweenBuildings, (buildingFootprint[0] + buildingFootprint[1]), buildingFootprint[0] * spaceBetweenBuildings)
-                buildingMesh.material.color.set(white);
-            } else if (block.blockType === 'residential') {
+            } else if (block.blockType === blockTypes.residential) {
                 buildingMesh.position.set(xBlockOffset + (blockSize - buildingOrigin[1]) - buildingFootprint[1] / 2, (buildingFootprint[0] + buildingFootprint[1]) / (2 * 2), yBlockOffset + (blockSize - buildingOrigin[0]) - buildingFootprint[0] / 2)
                 buildingMesh.scale.set(buildingFootprint[1] * spaceBetweenBuildings, (buildingFootprint[0] + buildingFootprint[1]) / 2, buildingFootprint[0] * spaceBetweenBuildings)
-                buildingMesh.material.color.set(green);
+            } else if (block.blockType === blockTypes['urban-residential']) {
+                buildingMesh.position.set(xBlockOffset + (blockSize - buildingOrigin[1]) - buildingFootprint[1] / 2, (buildingFootprint[0] + buildingFootprint[1]) / (2 * 1.5), yBlockOffset + (blockSize - buildingOrigin[0]) - buildingFootprint[0] / 2)
+                buildingMesh.scale.set(buildingFootprint[1] * spaceBetweenBuildings, (buildingFootprint[0] + buildingFootprint[1]) / 1.5, buildingFootprint[0] * spaceBetweenBuildings)
             }
+            buildingMesh.material.color.set(buildingTypeColors[block.blockType]);
             buildingMesh.buildingData = building
             buildingMeshes.push(buildingMesh)
             scene.add(buildingMesh);
-            if (building.address.includes('302')) {
-                buildingMesh.material.color.set(blue);
-            }
         }
         for (let row = 0; row < blockSize; row++) {
             for (let col = 0; col < blockSize; col++) {
@@ -502,23 +528,16 @@ function animate() {
 
     raycaster.setFromCamera(mouse, camera);
 
-    //commented out this thing that would change the color of things under the mouse. Feels useful.
     const intersection = raycaster.intersectObjects(buildingMeshes);
     if (intersection.length > 0) {
         if (intersection[0].object !== selectedBuilding) {
-            if (selectedBuilding?.buildingData?.block.blockType === 'commercial') {
-                selectedBuilding.material.color.set(white);
-            } else if (selectedBuilding?.buildingData?.block.blockType === 'residential') {
-                selectedBuilding.material.color.set(green);
+            if (selectedBuilding) {
+                selectedBuilding.material.color.set(buildingTypeColors[selectedBuilding.buildingData.block.blockType])
             }
             selectedBuilding = intersection[0].object
         }
 
-        // selectedBuilding.material.color.setHex(0xff0000)
-        // }
-        // selectedBuilding = intersection[0].object
         intersection[0].object.material.color.setHex(0xff0000)
-        // }
     }
     render();
 }
