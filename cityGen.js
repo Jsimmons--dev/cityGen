@@ -454,16 +454,38 @@ function init() {
             const geometry = new THREE.BoxGeometry(1, 1, 1);
             const material = new THREE.MeshPhongMaterial({ color: 0xffffff });
             const buildingMesh = new THREE.Mesh(geometry, material);
-            if (block.blockType === blockTypes.commercial) {
-                buildingMesh.position.set(xBlockOffset + (blockSize - buildingOrigin[1]) - buildingFootprint[1] / 2, (buildingFootprint[0] + buildingFootprint[1]) / (2), yBlockOffset + (blockSize - buildingOrigin[0]) - buildingFootprint[0] / 2)
-                buildingMesh.scale.set(buildingFootprint[1] * spaceBetweenBuildings, (buildingFootprint[0] + buildingFootprint[1]), buildingFootprint[0] * spaceBetweenBuildings)
-            } else if (block.blockType === blockTypes.residential) {
-                buildingMesh.position.set(xBlockOffset + (blockSize - buildingOrigin[1]) - buildingFootprint[1] / 2, (buildingFootprint[0] + buildingFootprint[1]) / (2 * 2), yBlockOffset + (blockSize - buildingOrigin[0]) - buildingFootprint[0] / 2)
-                buildingMesh.scale.set(buildingFootprint[1] * spaceBetweenBuildings, (buildingFootprint[0] + buildingFootprint[1]) / 2, buildingFootprint[0] * spaceBetweenBuildings)
-            } else if (block.blockType === blockTypes['urban-residential']) {
-                buildingMesh.position.set(xBlockOffset + (blockSize - buildingOrigin[1]) - buildingFootprint[1] / 2, (buildingFootprint[0] + buildingFootprint[1]) / (2 * 1.5), yBlockOffset + (blockSize - buildingOrigin[0]) - buildingFootprint[0] / 2)
-                buildingMesh.scale.set(buildingFootprint[1] * spaceBetweenBuildings, (buildingFootprint[0] + buildingFootprint[1]) / 1.5, buildingFootprint[0] * spaceBetweenBuildings)
+            function getXOffset() {
+                return xBlockOffset + (blockSize - buildingOrigin[1]) - buildingFootprint[1] / 2
             }
+            function getZOffset() {
+                return yBlockOffset + (blockSize - buildingOrigin[0]) - buildingFootprint[0] / 2
+            }
+            function getYOffset(scaleFactor = 1) {
+                return (buildingFootprint[0] + buildingFootprint[1]) / (2 * scaleFactor)
+            }
+
+            function getXScale() {
+                return buildingFootprint[1] * spaceBetweenBuildings
+            }
+            function getYScale(scaleFactor = 1) {
+                return (buildingFootprint[0] + buildingFootprint[1]) / scaleFactor
+            }
+            function getZScale() {
+                return buildingFootprint[0] * spaceBetweenBuildings
+            }
+            function setBuildingPositionAndScale(scaleFactor = 1) {
+                buildingMesh.position.set(getXOffset(), getYOffset(scaleFactor), getZOffset())
+                buildingMesh.scale.set(getXScale(), getYScale(scaleFactor), getZScale())
+            }
+            let scaleFactor = 1
+            if (block.blockType === blockTypes.commercial) {
+                scaleFactor = 2
+            } else if (block.blockType === blockTypes.residential) {
+                scaleFactor = 1
+            } else if (block.blockType === blockTypes['urban-residential']) {
+                scaleFactor = 1.5
+            }
+            setBuildingPositionAndScale(scaleFactor)
             buildingMesh.material.color.set(buildingTypeColors[block.blockType]);
             buildingMesh.buildingData = building
             buildingMeshes.push(buildingMesh)
